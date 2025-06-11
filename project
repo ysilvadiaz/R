@@ -221,7 +221,7 @@ If I had subject matter expertise, I could manually combine categories. If you d
 
 Consider each variable and decide whether to keep, transform, or drop it. This is a mixture of Exploratory Data Analysis and Feature Engineering, but it's helpful to do some simple feature engineering as you explore the data. In this project, we have all data to begin with, so any transformations will be performed on the entire dataset. Ideally, do the transformations as a `recipe_step()` in the tidymodels framework. Then the transformations would be applied to any data the recipe was used on as part of the modeling workflow. There is less chance of data leakage or missing a step when you perform the feature engineering in the recipe.
 
-
+## STRINGS
 __Exploring city__
 City is a categorical variable with 894 unique values. It is not practical to use city as a predictor in a model, so we will drop it.
 
@@ -256,6 +256,109 @@ card_fraud %>%
 
 _CONCLUSION:_ state is NOT an useful variable to predict fraud.
 
+__Exploring wday__
+```{r}
+card_fraud %>% 
+  group_by(wday) %>%
+  summarise(
+    n_fraud = sum(is_fraud == "1"), # The total # of fraudulent transactions
+    total_n = n(), # The total # of f transactions
+    percent_fraud = (n_fraud / total_n) * 100 # The percentage of fraudulent transactions
+  ) %>% 
+  
+  # Plotting our bar graph
+  ggplot(aes(x =  wday, y = percent_fraud)) + # The days are already in order
+    geom_bar(stat = "identity", fill = "steelblue") +
+    labs(
+      title = "Sunday and Monday are the days with least credit card frauds",
+      x = NULL,
+      y = "Fraudulent transactions as percentage of total (%)"
+    ) +
+  theme(plot.title.position = "plot",
+        plot.title = element_text(hjust = 0)) + # To move the title to the left
+  theme_minimal()
+```
+
+Just by LOOKING at the graph, we do see a difference in weekdays, specially if the transaction was made in Sunday and Monday. To test this assumption, we use a Chi-squared test. Our null hypotesis is that fraud is independent to weekday.
+
+```{r}
+# Chi-squared test for independence
+chisq.test(table(card_fraud$wday, card_fraud$is_fraud))
+```
+The evidence against the null variable (the p-value) is way to small. So we REJECT the null hypotesis (meaning, fraud DOES depend on weekday). 
+
+__CONCLUSION:__ Weekday IS an useful variable to predict fraud. 
+
+__Exploring month_name__
+```{r}
+card_fraud %>% 
+  group_by(month_name) %>%
+  summarise(
+    n_fraud = sum(is_fraud == "1"), # The total # of fraudulent transactions
+    total_n = n(), # The total # of f transactions
+    percent_fraud = (n_fraud / total_n) * 100 # The percentage of fraudulent transactions
+  ) %>% 
+  
+  # Plotting our bar graph
+  ggplot(aes(x =  month_name, y = percent_fraud)) + # The days are already in order
+    geom_bar(stat = "identity", fill = "steelblue") +
+    labs(
+      title = "January and February are the months with more credit card frauds",
+      x = NULL,
+      y = "Fraudulent transactions as percentage of total (%)"
+    ) +
+  theme(plot.title.position = "plot",
+        plot.title = element_text(hjust = 0)) + # To move the title to the left
+  theme_minimal()
+```
+Just by LOOKING at the graph, we do see a difference in months, specially if the transaction was made in January and February. To test this assumption, we use a Chi-squared test. Our null hypotesis is that fraud is independent to month.
+
+```{r}
+# Chi-squared test for independence
+chisq.test(table(card_fraud$month_name, card_fraud$is_fraud))
+```
+
+The evidence against the null variable (the p-value) is way to small. So we REJECT the null hypotesis (meaning, fraud DOES depend on month). 
+
+Finally, for it not to be necessary to create 11 dummy variables in the model (one for each month and excluding the base one), I will create a new variable called quarter and I will use this one as a variable in the model. 
+
+```{r}
+card_fraud <- card_fraud %>%
+  mutate(quarter = quarter(trans_date_trans_time, with_year = FALSE)) %>% 
+  mutate(quarter = factor(quarter))
+```
+
+__CONCLUSION:__ Month name is an useful variable to predict fraud. However, instead of this one we create a new variable (quarter) in order to have less categories.
+
+## GEOSPACIAL
+__CONCLUSION:__ Geospacial variables are redundant to our analysis since we are already creating two new variables for distance, which are both computed based on our geospacial variables.
+
+## DATES
+
+__Exploring dob__
+Makes no sense to explore this variable as we are already creating a new variable called age, which is the age of the card holder at the time of the transaction (computed as the difference between both dates - transaction date and dob). 
+
+__CONCLUSION:__ Date of birth (dob) is NOT an useful variable to predict fraud.
+
+# DATE/TIMES:
+__Exploring trans_date_trans_time__
+__CONCLUSION:__ Makes no sense to explore this variable as we already created new variables (hour, wday, month_name, age) based on this.
+
+# NUMERICAL
+__Exploring year__
+Since we only have two years of data (2019 and 2020), there's no need to create a graph for this one, by simply looking two fraud percentage we can conclude if the variable is useful or not.
+```{r}
+card_fraud %>% 
+  group_by(year) %>%
+  summarise(
+    n_fraud = sum(is_fraud == "1"), # The total # of fraudulent transactions
+    total_n = n(), # The total # of f transactions
+    percent_fraud = (n_fraud / total_n) * 100 # The percentage of fraudulent transactions
+  ) 
+```
+As we can observe, the fraud percentage is very similar in both years, so we can conclude that year is not a useful variable to predict fraud.
+
+__CONCLUSION:__ Year is NOT an useful variable to predict fraud.
 
 __Exploring distance_miles and distance_km__
 The distance_miles and distance_km variables are numerical variables that represent the distance between the card holder's location and the merchant's location. We will keep only one of these variables, as they represent the same information in different units. We will keep distance_km.
