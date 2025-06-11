@@ -396,8 +396,7 @@ card_fraud %>%
   theme_minimal()
 
 # Convert to factor only (without order because step_dummy does not work well with ordered factors)
-card_fraud <- card_fraud %>% 
-  mutate(wday = as.factor(wday)) %>%
+card_fraud$wday <- factor(card_fraud$wday, ordered = FALSE)
 ```
 
 Just by LOOKING at the graph, we do see a difference in weekdays, specially if the transaction was made in Sunday and Monday. To test this assumption, we use a Chi-squared test. Our null hypotesis is that fraud is independent to weekday.
