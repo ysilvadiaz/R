@@ -1,6 +1,6 @@
 ---
 title: "Final Group project"
-author: "Paola Pavon, Maria Meneses, Yesenia Silva"
+author: "Paola Pavon, Maria Meneses, Yesenia Silva, Hauwa Umaru"
 date: "`r Sys.Date()`"
 output:
   html_document:
