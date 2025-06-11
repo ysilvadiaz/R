@@ -396,7 +396,7 @@ card_fraud %>%
   theme_minimal()
 
 # Convert to factor only (without order because step_dummy does not work well with ordered factors)
-card_fraud %>% 
+card_fraud <- card_fraud %>% 
   mutate(wday = as.factor(wday)) %>%
 ```
 
