@@ -222,6 +222,27 @@ If I had subject matter expertise, I could manually combine categories. If you d
 Consider each variable and decide whether to keep, transform, or drop it. This is a mixture of Exploratory Data Analysis and Feature Engineering, but it's helpful to do some simple feature engineering as you explore the data. In this project, we have all data to begin with, so any transformations will be performed on the entire dataset. Ideally, do the transformations as a `recipe_step()` in the tidymodels framework. Then the transformations would be applied to any data the recipe was used on as part of the modeling workflow. There is less chance of data leakage or missing a step when you perform the feature engineering in the recipe.
 
 ## STRINGS
+
+__Exploring category__
+```{r}
+
+# Category
+card_fraud %>%
+  count(category) %>%
+  ggplot(aes(x = reorder(category, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Count by Category", x = "Category", y = "Count")
+
+# Amt by Category
+ggplot(card_fraud, aes(x = category, y = amt)) +
+  geom_boxplot(fill = "lightgreen") +
+  labs(title = "Amount by Category", x = "Category", y = "Amount") +
+  coord_flip()
+```
+__CONCLUSION:__ 
+The category variable displays a clear imbalance in transaction counts across merchant types, with some categories (e.g., gas_transport, grocery_pos) being much more frequent than others. This suggests merchant category is an important feature, as certain types are more likely to be targeted for fraud or have distinct spending patterns.
+
 __Exploring city__
 City is a categorical variable with 894 unique values. It is not practical to use city as a predictor in a model, so we will drop it.
 
@@ -359,6 +380,48 @@ card_fraud %>%
 As we can observe, the fraud percentage is very similar in both years, so we can conclude that year is not a useful variable to predict fraud.
 
 __CONCLUSION:__ Year is NOT an useful variable to predict fraud.
+
+__Exploring amt__
+
+```{r}
+# Amt
+ggplot(card_fraud, aes(x = amt)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Amount", x = "Amount", y = "Frequency")
+summary(card_fraud$amt)
+
+```
+__CONCLUSION:__
+The amt variable is highly right-skewed, with most transactions at lower amounts and a few extreme outliers at high values. This indicates that fraudulent activity may be associated with atypical transaction amounts, making this variable important for fraud detection.
+
+__Exploring age__
+```{r}
+# Age
+ggplot(card_fraud, aes(x = age)) +
+  geom_histogram(bins = 30, fill = "salmon", color = "black") +
+  labs(title = "Distribution of Age", x = "Age", y = "Frequency")
+summary(card_fraud$age)
+
+# Amt vs Age (Scatter Plot)
+ggplot(card_fraud, aes(x = age, y = amt)) +
+  geom_point(alpha = 0.5) +
+  labs(title = "Amount vs Age", x = "Age", y = "Amount")
+
+# Amt by Age Group  
+card_fraud <- card_fraud %>%
+  mutate(age_group = cut(age, breaks = c(0, 18, 30, 45, 60, Inf),
+                         labels = c("0-18", "19-30", "31-45", "46-60", "61+")))
+
+ggplot(card_fraud, aes(x = age_group, y = amt)) +
+  geom_boxplot(fill = "violet") +
+  labs(title = "Amount by Age Group", x = "Age Group", y = "Amount")
+
+# Missing Values
+colSums(is.na(card_fraud[c("category", "amt", "age")]))
+
+```
+__CONCLUSION:__
+The age variable covers a wide range of cardholder ages, with clusters in young and middle-aged groups. The scatter and boxplots show that transaction amounts vary across age groups, with some groups exhibiting higher value outliers. This suggests age influences spending behavior and may contribute to identifying fraud risk.
 
 __Exploring distance_miles and distance_km__
 The distance_miles and distance_km variables are numerical variables that represent the distance between the card holder's location and the merchant's location. We will keep only one of these variables, as they represent the same information in different units. We will keep distance_km.
