@@ -239,9 +239,36 @@ ggplot(card_fraud, aes(x = category, y = amt)) +
   geom_boxplot(fill = "lightgreen") +
   labs(title = "Amount by Category", x = "Category", y = "Amount") +
   coord_flip()
+
+# Category by is_fraud
+card_fraud %>%
+  group_by(category, is_fraud) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  mutate(freq = count / sum(count) * 100) %>%
+  filter(is_fraud == 1) %>%
+  arrange(desc(freq)) %>%
+  ggplot(aes(x = reorder(category, freq), y = freq)) +
+  geom_bar(stat = "identity", fill = "#e74c3c", alpha = 0.8) +
+  geom_text(aes(label = round(freq, 1)), hjust = -0.1, size = 3) +
+  coord_flip() +
+  labs(
+    title = "Fraud Is Concentrated in a Few Spending Categories",
+    subtitle = "Relative share of fraudulent transactions by purchase category (2019-2020)",
+    x = NULL,
+    y = "Percentage (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title     = element_text(size = 14, face = "bold"),
+    axis.title.x   = element_text(size = 10),
+    axis.title.y   = element_text(size = 10),
+    axis.text      = element_text(size = 8),
+    panel.grid.minor = element_blank()
+  )
+
 ```
 __CONCLUSION:__ 
-The category variable displays a clear imbalance in transaction counts across merchant types, with some categories (e.g., gas_transport, grocery_pos) being much more frequent than others. This suggests merchant category is an important feature, as certain types are more likely to be targeted for fraud or have distinct spending patterns.
+The category variable displays a clear imbalance in transaction counts and fraudulent cases across merchant types, with some categories being much more frequent than others. This suggests that merchant category is a crucial feature, as certain types are more likely to be targeted for fraud. 
 
 __Exploring city__
 City is a categorical variable with 894 unique values. It is not practical to use city as a predictor in a model, so we will drop it.
