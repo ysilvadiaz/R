@@ -221,13 +221,11 @@ If I had subject matter expertise, I could manually combine categories. If you d
 
 Consider each variable and decide whether to keep, transform, or drop it. This is a mixture of Exploratory Data Analysis and Feature Engineering, but it's helpful to do some simple feature engineering as you explore the data. In this project, we have all data to begin with, so any transformations will be performed on the entire dataset. Ideally, do the transformations as a `recipe_step()` in the tidymodels framework. Then the transformations would be applied to any data the recipe was used on as part of the modeling workflow. There is less chance of data leakage or missing a step when you perform the feature engineering in the recipe.
 
+
+__Exploring city__
+City is a categorical variable with 894 unique values. It is not practical to use city as a predictor in a model, so we will drop it.
+
 ```{r}
-card_fraud %>% 
-  select(distance_km) %>% 
-  skimr::skim()
-
-quantile(card_fraud$distance_km, 0.995, na.rm = TRUE)
-
 #---  Fraudulent transactions rate by city   ---#
 card_fraud %>%
   group_by(city) %>%
@@ -237,9 +235,14 @@ card_fraud %>%
     fraud_rate = n_fraud / n_total
   )  %>%
   arrange(desc(fraud_rate))
+```
 
+_CONCLUSION:_ city is NOT an useful variable to predict fraud.
 
+__Exploring state__
+State is a categorical variable with 51 unique values. It is not practical to use state as a predictor in a model, so we will drop it.
 
+```{r}
 #---  Fraudulent transactions rate by state   ---#
 card_fraud %>%
   group_by(state) %>%
@@ -249,6 +252,19 @@ card_fraud %>%
     fraud_rate = n_fraud / n_total
   )  %>%
   arrange(desc(fraud_rate))
+```
+
+_CONCLUSION:_ state is NOT an useful variable to predict fraud.
+
+
+__Exploring distance_miles and distance_km__
+The distance_miles and distance_km variables are numerical variables that represent the distance between the card holder's location and the merchant's location. We will keep only one of these variables, as they represent the same information in different units. We will keep distance_km.
+
+```{r}
+#---  Fraudulent transactions rate by distance_miles   ---#
+
+# Percentile 99.5
+quantile(card_fraud$distance_km, 0.995, na.rm = TRUE)
 
 
 # Plot distance by is_fraud
@@ -285,13 +301,6 @@ card_fraud <- card_fraud %>%
 
 # Fraudulent transaction by distance and state
 card_fraud %>%
-  mutate(
-    distance_bin = cut(
-      distance_km,
-      breaks = seq(0, max(distance_km, na.rm=TRUE) + 15, by = 15),
-      right = FALSE,
-      include.lowest = TRUE)
-  )%>%
   group_by(distance_bin) %>%
   summarise(
     total = n(),
@@ -342,17 +351,12 @@ card_fraud <- card_fraud %>%
 chisq.test(table(card_fraud$distance_135_km, card_fraud$is_fraud))
 
 ```
+_CONCLUSION:_ distance_miles is NOT an useful variable to predict fraud.
 
+distance_km is NOT an useful variable to predict fraud, the distribution of distance_km appears similar for both fraudulent and non-fraudulent transactions, suggesting that distance alone may not be a strong predictor of fraud. However, we observe that transactions involving distances greater than 135 km —corresponding to the 99.5th percentile— can be flagged with a new binary variable. Notably, the fraud rate increases for these long-distance transactions; for instance, nearly 1% of transactions over 135 km are fraudulent. This pattern could indicate that such transactions carry a higher risk and may be useful for model features or rule-based alerts. Besides, the p-value of the chi-squared test for independence between distance_135_km and is_fraud is less than 0.05, indicating that there is a significant association between these two variables.
 
-_CONCLUSION:_ We can remove the longitude and latitude variables, as the data set already includes distance-related variables that are more informative for our model. When examining the location-related features - city, state, distance_miles, and distance_km - we find that distance_miles and distance_km are numerical, while city and state are categorical (converted to factors). The dataset contains 894 unique cities and 51 states, which is a big number of categories, we can get rid of the city and state variables, as they do not provide much information for our model.
+distance_135_km is YES an useful variable to predict fraud.
 
-Since distance_miles and distance_km represent the same information in different units, we retain only one—distance_km—and discard distance_miles. The distribution of distance_km appears similar for both fraudulent and non-fraudulent transactions, suggesting that distance alone may not be a strong predictor of fraud. However, we observe that transactions involving distances greater than 135 km —corresponding to the 99.5th percentile— can be flagged with a new binary variable. Notably, the fraud rate increases for these long-distance transactions; for instance, nearly 1% of transactions over 135 km are fraudulent. This pattern could indicate that such transactions carry a higher risk and may be useful for model features or rule-based alerts. Besides, the p-value of the chi-squared test for independence between distance_135_km and is_fraud is less than 0.05, indicating that there is a significant association between these two variables.
-
-VARIABLE IMPORTANCE: (include y/n)
-- city: NO, 894 cities (Yese)
-- state: NO, 51 states (Yese)
-- ⁠distance_miles: NO (Yese). We already have distance_km
-- distance_km: YES, but change it to distance_135_km (Yese)
 
 ## Which variables to keep in your model?
 
@@ -618,4 +622,3 @@ cost_summary
 - Our classifier also has some false positives, `r scales::dollar(cost_summary$false_positives)`, namely flagging transactions as fraudulent, but which were legitimate. Assuming the card company makes around 2% for each transaction (source: https://startups.co.uk/payment-processing/credit-card-processing-fees/), the amount of money lost due to these false positives is `r scales::dollar(cost_summary$false_positives * 0.02)`
 
 - The \$ improvement over the naive policy is `r scales::dollar(cost_summary$false_naives - cost_summary$false_negatives - cost_summary$false_positives * 0.02)`.
-
