@@ -486,6 +486,9 @@ ggplot(card_fraud, aes(x = amt)) +
   labs(title = "Distribution of Amount", x = "Amount", y = "Frequency")
 summary(card_fraud$amt)
 
+ggplot(card_fraud, aes(x = log(amt))) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Amount in Logs", x = "Amount (log)", y = "Frequency")
 ```
 __CONCLUSION:__
 The amt variable is highly right-skewed, with most transactions at lower amounts and a few extreme outliers at high values. This indicates that fraudulent activity may be associated with atypical transaction amounts, making this variable important for fraud detection.
