@@ -277,6 +277,75 @@ card_fraud %>%
 
 _CONCLUSION:_ state is NOT an useful variable to predict fraud.
 
+__Exploring job__ 
+The job variable has 494 unique values, which is a lot for a machine learning model. The most common job appears in only 0.5% of the data, and the least common in just 0.0001%.
+To simplify, we used ChatGPT to group jobs into 20 broader categories like "Professional", "Sales", or "Service". However, the histogram shows that most jobs ended up in the "Other" group. Since our goal is to predict fraud transactions, and this variable would offer little interpretability if the "Other" category dominates, it’s better to drop it from the model.
+
+__Conclusion__
+We drop the variable.
+
+```{r}
+card_fraud %>% 
+  count(job, sort = TRUE) %>% 
+  mutate(perc = n * 100 / sum(n)) %>% 
+  arrange(desc(perc)) 
+
+card_fraud %>% 
+  count(job, sort = TRUE) %>% 
+  mutate(perc = n * 100 / sum(n)) %>% 
+  summarise(
+    min = min(perc),
+    max = max(perc),
+    mean = mean(perc),
+    median = median(perc),
+    sd = sd(perc),
+    q1 = quantile(perc, 0.25),
+    q3 = quantile(perc, 0.75)
+  )
+
+# Classification done by chat gpt 
+unique(card_fraud$job)
+
+classified_jobs <- card_fraud %>%
+  mutate(job_category_20 = case_when(
+    str_detect(job, regex("engineer|engineering|architect|surveyor|planner|technologist", TRUE)) ~ "Engineering & Architecture",
+    str_detect(job, regex("doctor|surgeon|oncologist|physician|pathologist", TRUE)) ~ "Medicine",
+    str_detect(job, regex("nurse|midwife|paramedic", TRUE)) ~ "Nursing & Emergency Care",
+    str_detect(job, regex("therapist|psychologist|counsellor|psychiatrist|psychotherapist", TRUE)) ~ "Mental Health",
+    str_detect(job, regex("teacher|lecturer|professor|education|instructor|trainer", TRUE)) ~ "Education",
+    str_detect(job, regex("scientist|researcher|biochemist|chemist|geologist|physicist", TRUE)) ~ "Scientific Research",
+    str_detect(job, regex("it|developer|programmer|software|data scientist|web|cyber|applications", TRUE)) ~ "Technology & Data",
+    str_detect(job, regex("accountant|finance|auditor|bookkeeper", TRUE)) ~ "Accounting & Finance",
+    str_detect(job, regex("banker|investment|trader|analyst", TRUE)) ~ "Banking & Markets",
+    str_detect(job, regex("manager|coordinator|administrator|officer|director", TRUE)) ~ "Management & Administration",
+    str_detect(job, regex("sales|retail|buyer|promotion|merchandiser", TRUE)) ~ "Sales & Retail",
+    str_detect(job, regex("marketing|advertising|public relations|pr", TRUE)) ~ "Marketing & Communication",
+    str_detect(job, regex("artist|designer|illustrator|animator|art", TRUE)) ~ "Art & Design",
+    str_detect(job, regex("media|journalist|broadcast|camera|film|editor", TRUE)) ~ "Media & Journalism",
+    str_detect(job, regex("lawyer|solicitor|legal|barrister|attorney", TRUE)) ~ "Legal",
+    str_detect(job, regex("police|firefighter|armed forces|immigration|customs|military", TRUE)) ~ "Law Enforcement & Defense",
+    str_detect(job, regex("environmental|ecologist|conservation|geochemist", TRUE)) ~ "Environmental & Earth Sciences",
+    str_detect(job, regex("pharmacist|pharmacologist|toxicologist", TRUE)) ~ "Pharmacy & Toxicology",
+    str_detect(job, regex("hospitality|tourism|hotel|restaurant|barista", TRUE)) ~ "Hospitality & Tourism",
+    str_detect(job, regex("charity|social|aid|community|volunteer", TRUE)) ~ "Social & Community Work",
+    TRUE ~ "Other"
+  ))
+
+classified_jobs %>%
+  count(job_category_20, sort = TRUE) %>%
+  ggplot(aes(x = reorder(job_category_20, n), y = n)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = n), hjust = -0.1, size = 2.5) +  # Tamaño reducido
+  coord_flip() +
+  labs(
+    title = "Job Distribution by Category",
+    x = "Job Category",
+    y = "Count"
+  ) +
+  theme_minimal() +
+  expand_limits(y = max(classified_jobs %>% count(job_category_20) %>% pull(n)) * 1.1)
+```
+
 __Exploring wday__
 ```{r}
 card_fraud %>% 
@@ -393,6 +462,98 @@ summary(card_fraud$amt)
 ```
 __CONCLUSION:__
 The amt variable is highly right-skewed, with most transactions at lower amounts and a few extreme outliers at high values. This indicates that fraudulent activity may be associated with atypical transaction amounts, making this variable important for fraud detection.
+
+__Exploring city population__
+The city_pop variable was originally numeric, but its histogram showed a wide distribution with extreme outliers. To address this, we grouped it into five categories:
+
+Very Small: 0–1,000
+Small: 1,001–5,000
+Medium: 5,001–50,000
+Large: 50,001–500,000
+Very Large: 500,001 and above
+
+When we compared these categories with the is_fraud variable, we didn’t observe any clear or significant differences in fraud occurrence across groups.However we will include it in the model to check it statistically. 
+
+__Conclusion__ 
+We transformed the variable into a categorical one with four classifications.
+
+```{r}
+# Initial histogram: There is a high dispersion
+ggplot(card_fraud, aes(x = city_pop)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "white") +
+  labs(
+    title = "Histogram of City Population",
+    x = "City Population",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+# Transform the variable into categories
+card_fraud = card_fraud %>%
+  mutate(city_pop_cat = case_when(
+    city_pop <= 1000 ~ "Very Small",
+    city_pop <= 5000 ~ "Small",
+    city_pop <= 50000 ~ "Medium",
+    city_pop <= 500000 ~ "Large",
+    TRUE ~ "Very Large"
+  )) 
+
+# Count and percentage by category
+card_fraud %>% 
+  count(city_pop_cat, sort = TRUE) %>%
+  mutate(perc = round(n * 100 / sum(n), 2)) %>% 
+  ggplot(aes(x = reorder(city_pop_cat, -perc), y = perc)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = paste0(perc, "%")), vjust = -0.5, size = 3) +
+  labs(
+    title = "City Population Categories",
+    x = "City Population Category",
+    y = "Percentage (%)"
+  ) +
+  theme_minimal()
+
+# Barplot of is_fraud and city_pop_cat
+card_fraud %>% 
+  group_by(city_pop_cat, is_fraud) %>%
+  summarise(n = n()) %>%
+  mutate(perc = round(n * 100 / sum(n), 2)) %>% 
+  ggplot(aes(x = city_pop_cat, y = perc, fill = is_fraud)) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = paste0(perc, "%")), position = position_dodge(width = 0.9), vjust = -0.5, size = 3) +
+  labs(
+    title = "Fraud Distribution by City Population Category",
+    x = "City Population Category",
+    y = "Percentage (%)",
+    fill = "Is Fraud"
+  ) +
+  theme_minimal() 
+  
+```
+__Exploring Hour__
+The percentage of fraudulent transactions varies significantly by hour. Fraud is most likely to occur during the early hours of the day (midnight to 3 a.m.) and again late at night (10 p.m. to midnight), where fraud rates exceed 2.5%. In contrast, fraud is least common during regular business hours, with percentages remaining well below 1%. These patterns suggest that fraudulent activity tends to occur outside of typical working hours, possibly when detection is less likely.
+
+__CONCLUSION__
+We kept the variable because it seems visually to be important for the classification. We will test it with the model. 
+
+```{r}
+summary(card_fraud$hour)
+
+card_fraud %>%
+  group_by(hour, is_fraud) %>%
+  count() %>%
+  group_by(hour) %>%
+  mutate(perc = round(n * 100 / sum(n), 2)) %>%
+  filter(is_fraud == 1) %>%
+  ggplot(aes(x = hour, y = perc)) +
+  geom_col(fill = "blue") +
+  labs(
+    title = "Percentage of Fraudulent Transactions by Hour",
+    x = "Hour of Day",
+    y = "Fraud Percentage (%)"
+  ) +
+  theme_minimal()
+
+```
 
 __Exploring age__
 ```{r}
