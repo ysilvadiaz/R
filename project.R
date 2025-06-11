@@ -719,6 +719,25 @@ distance_135_km is YES an useful variable to predict fraud.
 
 You have a number of variables and you have to decide which ones to use in your model. For instance, you have the latitude/lognitude of the customer, that of the merchant, the same data in radians, as well as the `distance_km` and `distance_miles`. Do you need them all? 
 
+### STRING:
+- category
+- wday
+- quarter
+- city_pop_cat
+- distance_135_km
+
+### NUMERICAL:
+- amt
+- hour
+- age
+
+```{r}
+# Select the variables to keep in the model
+card_fraud <- card_fraud %>% 
+  select(is_fraud, category, wday, quarter, city_pop_cat, distance_135_km,
+         amt, hour, age)
+```
+
 
 ## Fit your workflows in smaller sample
 
