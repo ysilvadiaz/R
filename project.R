@@ -793,10 +793,11 @@ What steps are you going to add to your recipe? Do you need to do any log transf
 ```{r, define_recipe}
 
 fraud_rec <- recipe(is_fraud ~ ., data = card_fraud_train) %>%
-
-
-
-
+  step_novel(all_nominal(), -all_outcomes()) %>% # Use *before* `step_dummy()` so new level is dummified
+  step_dummy(all_nominal(), -all_outcomes()) %>% 
+  step_zv(all_numeric(), -all_outcomes())  %>% 
+  step_normalize(amt,hour,age) #%>% 
+  #step_corr(all_predictors(), threshold = 0.75, method = "spearman") 
 
 ```
 
