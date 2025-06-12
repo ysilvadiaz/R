@@ -822,9 +822,6 @@ prepped_data <-
 
 glimpse(prepped_data)
 
-prep_rec <- prep(fraud_rec)
-baked_data <- bake(prep_rec, new_data = NULL)
-
 ```
 
 
@@ -1067,7 +1064,7 @@ log_metrics <-
   collect_metrics() %>% #summarize true
   # add the name of the model to every row
   mutate(model = "Logistic Regression",
-         time = log_time)
+         time = log_time$res)
 
 # add more models here
 tree_metrics <- 
@@ -1125,8 +1122,6 @@ model_comp %>%
   theme_light()+
   theme(legend.position = "none")+
   labs(y = NULL)
-
-
 
 
 ```
@@ -1202,17 +1197,17 @@ last_fit_xgb %>%
 ```{r}
 #| label: savings-for-cc-company
 
-best_model_preds <- 
-  best_model_wflow %>% 
+xgb_preds <- 
+  xgb_wflow %>% 
   fit(data = card_fraud_train) %>%  
   
   ## Use `augment()` to get predictions for entire data set
   augment(new_data = card_fraud)
 
-best_model_preds %>% 
+xgb_preds %>% 
   conf_mat(truth = is_fraud, estimate = .pred_class)
 
-cost <- best_model_preds %>%
+cost <- xgb_preds %>%
   select(is_fraud, log_amt, pred = .pred_class) 
 
 cost <- cost %>%
