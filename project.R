@@ -30,6 +30,8 @@ library(tictoc)
 library(vip)
 library(ranger)
 library(tidygeocoder)
+library(xgboost)
+library(ranger)
 ```
 
 # The problem: predicting credit card fraud
@@ -397,6 +399,7 @@ card_fraud %>%
 
 # Convert to factor only (without order because step_dummy does not work well with ordered factors)
 card_fraud$wday <- factor(card_fraud$wday, ordered = FALSE)
+  
 ```
 
 Just by LOOKING at the graph, we do see a difference in weekdays, specially if the transaction was made in Sunday and Monday. To test this assumption, we use a Chi-squared test. Our null hypotesis is that fraud is independent to weekday.
@@ -489,7 +492,11 @@ ggplot(card_fraud, aes(x = amt)) +
   labs(title = "Distribution of Amount", x = "Amount", y = "Frequency")
 summary(card_fraud$amt)
 
-ggplot(card_fraud, aes(x = log(amt))) +
+# Convert amt to log scale for better visualization
+card_fraud <- card_fraud %>%
+  mutate(log_amt = log(amt))
+
+ggplot(card_fraud, aes(x = log_amt)) +
   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
   labs(title = "Distribution of Amount in Logs", x = "Amount (log)", y = "Frequency")
 ```
@@ -704,18 +711,18 @@ chisq.test(table(card_fraud$distance_bin, card_fraud$is_fraud))
 # Convert distance_bin to a boolean factor variable
 card_fraud <- card_fraud %>%
   mutate(
-    distance_135_km = as.factor(ifelse(distance_km > 135, "1", "0"))
+    is_distance_135_km = as.factor(ifelse(distance_km > 135, "1", "0"))
   )
 
 # Chi-squared test for independence
-chisq.test(table(card_fraud$distance_135_km, card_fraud$is_fraud))
+chisq.test(table(card_fraud$is_distance_135_km, card_fraud$is_fraud))
 
 ```
 _CONCLUSION:_ distance_miles is NOT an useful variable to predict fraud.
 
-distance_km is NOT an useful variable to predict fraud, the distribution of distance_km appears similar for both fraudulent and non-fraudulent transactions, suggesting that distance alone may not be a strong predictor of fraud. However, we observe that transactions involving distances greater than 135 km —corresponding to the 99.5th percentile— can be flagged with a new binary variable. Notably, the fraud rate increases for these long-distance transactions; for instance, nearly 1% of transactions over 135 km are fraudulent. This pattern could indicate that such transactions carry a higher risk and may be useful for model features or rule-based alerts. Besides, the p-value of the chi-squared test for independence between distance_135_km and is_fraud is less than 0.05, indicating that there is a significant association between these two variables.
+distance_km is NOT an useful variable to predict fraud, the distribution of distance_km appears similar for both fraudulent and non-fraudulent transactions, suggesting that distance alone may not be a strong predictor of fraud. However, we observe that transactions involving distances greater than 135 km —corresponding to the 99.5th percentile— can be flagged with a new binary variable. Notably, the fraud rate increases for these long-distance transactions; for instance, nearly 1% of transactions over 135 km are fraudulent. This pattern could indicate that such transactions carry a higher risk and may be useful for model features or rule-based alerts. Besides, the p-value of the chi-squared test for independence between is_distance_135_km and is_fraud is less than 0.05, indicating that there is a significant association between these two variables.
 
-distance_135_km is YES an useful variable to predict fraud.
+is_distance_135_km is YES an useful variable to predict fraud.
 
 
 ## Which variables to keep in your model?
@@ -727,18 +734,18 @@ You have a number of variables and you have to decide which ones to use in your 
 - wday
 - quarter
 - city_pop_cat
-- distance_135_km
+- is_distance_135_km
 
 ### NUMERICAL:
-- amt
+- log_amt
 - hour
 - age
 
 ```{r}
 # Select the variables to keep in the model
 card_fraud <- card_fraud %>% 
-  select(is_fraud, category, wday, quarter, city_pop_cat, distance_135_km,
-         amt, hour, age)
+  select(is_fraud, category, wday, quarter, city_pop_cat, is_distance_135_km,
+         log_amt, hour, age)
 ```
 
 
@@ -792,12 +799,15 @@ What steps are you going to add to your recipe? Do you need to do any log transf
 
 ```{r, define_recipe}
 
+glimpse(card_fraud_train)
+
 fraud_rec <- recipe(is_fraud ~ ., data = card_fraud_train) %>%
   step_novel(all_nominal(), -all_outcomes()) %>% # Use *before* `step_dummy()` so new level is dummified
   step_dummy(all_nominal(), -all_outcomes()) %>% 
   step_zv(all_numeric(), -all_outcomes())  %>% 
-  step_normalize(amt,hour,age) #%>% 
-  #step_corr(all_predictors(), threshold = 0.75, method = "spearman") 
+  step_normalize(log_amt,hour,age) %>% 
+  step_corr(all_predictors(), threshold = 0.75, method = "spearman") 
+
 
 ```
 
@@ -810,6 +820,9 @@ prepped_data <-
   juice() # extract only the preprocessed dataframe 
 
 glimpse(prepped_data)
+
+prep_rec <- prep(fraud_rec)
+baked_data <- bake(prep_rec, new_data = NULL)
 
 ```
 
@@ -825,12 +838,45 @@ You should define the following classification models:
 5. A k-nearest neighbours,  using 4 nearest_neighbors and the `kknn` engine  
 
 ```{r, define_models}
-## Model Building 
+## Model Building
 
 # 1. Pick a `model type`
 # 2. set the `engine`
-# 3. Set the `mode`:  classification
+# 3. Set the `mode`: regression or classification
 
+# Logistic regression
+log_spec <-  logistic_reg() %>%  # model type
+  set_engine(engine = "glm") %>%  # model engine
+  set_mode("classification") # model mode
+
+# Show your model specification
+log_spec
+
+# Decision Tree
+tree_spec <- decision_tree() %>%
+  set_engine(engine = "C5.0") %>%
+  set_mode("classification")
+
+tree_spec
+
+# Random Forest
+rf_spec <- 
+  rand_forest() %>% 
+  set_engine("ranger", importance = "impurity") %>% 
+  set_mode("classification")
+
+
+# Boosted tree (XGBoost)
+xgb_spec <- 
+  boost_tree() %>% 
+  set_engine("xgboost") %>% 
+  set_mode("classification") 
+
+# K-nearest neighbour (k-NN)
+knn_spec <- 
+  nearest_neighbor(neighbors = 4) %>% # we can adjust the number of neighbors 
+  set_engine("kknn") %>% 
+  set_mode("classification")
 
 ```
 
@@ -841,11 +887,50 @@ You should define the following classification models:
 
 ## Bundle recipe and model with `workflows`
 
-
+# Create a workflow object to bundle the recipe and model specification
 log_wflow <- # new workflow object
  workflow() %>% # use workflow function
  add_recipe(fraud_rec) %>%   # use the new recipe
  add_model(log_spec)   # add your model spec
+
+# show object
+log_wflow
+
+
+## A few more workflows
+
+tree_wflow <-
+ workflow() %>%
+ add_recipe(fraud_rec) %>% 
+ add_model(tree_spec) 
+
+# show object
+tree_wflow
+
+rf_wflow <-
+ workflow() %>%
+ add_recipe(fraud_rec) %>% 
+ add_model(rf_spec) 
+
+# show object
+rf_wflow
+
+xgb_wflow <-
+ workflow() %>%
+ add_recipe(fraud_rec) %>% 
+ add_model(xgb_spec)
+
+# show object
+xgb_wflow
+
+knn_wflow <-
+ workflow() %>%
+ add_recipe(fraud_rec) %>% 
+ add_model(knn_spec)
+
+# show object
+knn_wflow
+
 
 ```
 
@@ -865,6 +950,105 @@ log_res <- log_wflow %>%
     control = control_resamples(save_pred = TRUE)) 
 time <- toc()
 log_time <- time[[4]]
+
+
+
+# Show average performance over all folds (note that we use log_res):
+log_res %>%  collect_metrics(summarize = TRUE)
+
+# Show performance for every single fold:
+log_res %>%  collect_metrics(summarize = FALSE)
+
+
+
+## `collect_predictions()` and get confusion matrix{.smaller}
+
+log_pred <- log_res %>% collect_predictions()
+
+log_pred %>%  conf_mat(is_fraud, .pred_class) 
+
+log_pred %>% 
+  conf_mat(is_fraud, .pred_class) %>% 
+  autoplot(type = "mosaic") +
+  geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TP", "FN", "FP", "TN")))
+
+
+log_pred %>% 
+  conf_mat(is_fraud, .pred_class) %>% 
+  autoplot(type = "heatmap")
+
+
+## ROC Curve
+
+log_pred %>% 
+  group_by(id) %>% # id contains our folds
+  roc_curve(is_fraud, .pred_1) %>% 
+  autoplot()
+
+
+## Decision Tree results
+tic()
+tree_res <-
+  tree_wflow %>% 
+  fit_resamples(
+    resamples = cv_folds, 
+    metrics = metric_set(
+      recall, precision, f_meas, 
+      accuracy, kap,
+      roc_auc, sens, spec),
+    control = control_resamples(save_pred = TRUE)
+    ) 
+time <- toc()
+tree_res %>%  collect_metrics(summarize = TRUE)
+
+
+## Random Forest
+tic()
+rf_res <-
+  rf_wflow %>% 
+  fit_resamples(
+    resamples = cv_folds, 
+    metrics = metric_set(
+      recall, precision, f_meas, 
+      accuracy, kap,
+      roc_auc, sens, spec),
+    control = control_resamples(save_pred = TRUE)
+    ) 
+time <- toc()
+rf_res %>%  collect_metrics(summarize = TRUE)
+
+## Boosted tree - XGBoost
+tic()
+xgb_res <- 
+  xgb_wflow %>% 
+  fit_resamples(
+    resamples = cv_folds, 
+    metrics = metric_set(
+      recall, precision, f_meas, 
+      accuracy, kap,
+      roc_auc, sens, spec),
+    control = control_resamples(save_pred = TRUE)
+    ) 
+time <- toc()
+xgb_res %>% collect_metrics(summarize = TRUE)
+
+## K-nearest neighbour
+tic()
+knn_res <- 
+  knn_wflow %>% 
+  fit_resamples(
+    resamples = cv_folds, 
+    metrics = metric_set(
+      recall, precision, f_meas, 
+      accuracy, kap,
+      roc_auc, sens, spec),
+    control = control_resamples(save_pred = TRUE)
+    ) 
+time <- toc()
+knn_res %>% collect_metrics(summarize = TRUE)
 
 
 ```
@@ -961,7 +1145,7 @@ best_model_preds %>%
   conf_mat(truth = is_fraud, estimate = .pred_class)
 
 cost <- best_model_preds %>%
-  select(is_fraud, amt, pred = .pred_class) 
+  select(is_fraud, log_amt, pred = .pred_class) 
 
 cost <- cost %>%
   mutate(
