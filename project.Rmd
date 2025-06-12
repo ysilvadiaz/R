@@ -32,6 +32,7 @@ library(ranger)
 library(tidygeocoder)
 library(xgboost)
 library(ranger)
+library(vip)
 ```
 
 # The problem: predicting credit card fraud
@@ -904,32 +905,21 @@ tree_wflow <-
  add_recipe(fraud_rec) %>% 
  add_model(tree_spec) 
 
-# show object
-tree_wflow
-
 rf_wflow <-
  workflow() %>%
  add_recipe(fraud_rec) %>% 
  add_model(rf_spec) 
-
-# show object
-rf_wflow
 
 xgb_wflow <-
  workflow() %>%
  add_recipe(fraud_rec) %>% 
  add_model(xgb_spec)
 
-# show object
-xgb_wflow
-
 knn_wflow <-
  workflow() %>%
  add_recipe(fraud_rec) %>% 
  add_model(knn_spec)
 
-# show object
-knn_wflow
 
 
 ```
@@ -949,8 +939,10 @@ log_res <- log_wflow %>%
       kap, roc_auc, sens, spec),
     control = control_resamples(save_pred = TRUE)) 
 time <- toc()
-log_time <- time[[4]]
 
+#Save the time of execution of each model
+log_time <- list()
+log_time$res <- time[[4]]
 
 
 # Show average performance over all folds (note that we use log_res):
@@ -1002,6 +994,9 @@ tree_res <-
     control = control_resamples(save_pred = TRUE)
     ) 
 time <- toc()
+#Save the time of execution of each model
+log_time$tree <- time[[4]]
+
 tree_res %>%  collect_metrics(summarize = TRUE)
 
 
@@ -1018,6 +1013,9 @@ rf_res <-
     control = control_resamples(save_pred = TRUE)
     ) 
 time <- toc()
+#Save the time of execution of each model
+log_time$rf <- time[[4]]
+
 rf_res %>%  collect_metrics(summarize = TRUE)
 
 ## Boosted tree - XGBoost
@@ -1033,6 +1031,9 @@ xgb_res <-
     control = control_resamples(save_pred = TRUE)
     ) 
 time <- toc()
+#Save the time of execution of each model
+log_time$xgb <- time[[4]]
+
 xgb_res %>% collect_metrics(summarize = TRUE)
 
 ## K-nearest neighbour
@@ -1048,6 +1049,9 @@ knn_res <-
     control = control_resamples(save_pred = TRUE)
     ) 
 time <- toc()
+#Save the time of execution of each model
+log_time$knn <- time[[4]]
+
 knn_res %>% collect_metrics(summarize = TRUE)
 
 
@@ -1060,12 +1064,31 @@ knn_res %>% collect_metrics(summarize = TRUE)
 
 log_metrics <- 
   log_res %>% 
-  collect_metrics(summarise = TRUE) %>%
+  collect_metrics() %>% #summarize true
   # add the name of the model to every row
   mutate(model = "Logistic Regression",
          time = log_time)
 
-# add mode models here
+# add more models here
+tree_metrics <- 
+  tree_res %>% 
+  collect_metrics() %>%
+  mutate(model = "Decision Tree")
+
+rf_metrics <- 
+  rf_res %>% 
+  collect_metrics() %>%
+  mutate(model = "Random Forest")
+
+xgb_metrics <- 
+  xgb_res %>% 
+  collect_metrics() %>%
+  mutate(model = "XGBoost")
+
+knn_metrics <- 
+  knn_res %>% 
+  collect_metrics() %>%
+  mutate(model = "Knn")
 
 # create dataframe with all models
 model_compare <- bind_rows(log_metrics,
@@ -1078,6 +1101,32 @@ model_compare <- bind_rows(log_metrics,
   mutate(time = str_sub(time, end = -13) %>% 
            as.double()
          )
+
+
+#Pivot wider to create barplot
+  model_comp <- model_compare %>% 
+  select(model, .metric, mean, std_err) %>% 
+  pivot_wider(names_from = .metric, values_from = c(mean, std_err)) 
+
+# show mean are under the curve (ROC-AUC) for every model
+model_comp %>% 
+  arrange(mean_roc_auc) %>% 
+  mutate(model = fct_reorder(model, mean_roc_auc)) %>% # order results
+  ggplot(aes(model, mean_roc_auc, fill=model)) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_brewer(palette = "Blues") +
+   geom_text(
+     size = 3,
+     aes(label = round(mean_roc_auc, 2), 
+         y = mean_roc_auc + 0.08),
+     vjust = 1
+  )+
+  theme_light()+
+  theme(legend.position = "none")+
+  labs(y = NULL)
+
+
 
 
 ```
@@ -1093,7 +1142,18 @@ This is a highly imbalanced data set, as roughly 99.5% of all transactions are o
 
 # - `last_fit()`  fits a model to the whole training data and evaluates it on the test set. 
 # - provide the workflow object of the best model as well as the data split object (not the training data). 
+
  
+last_fit_xgb <- last_fit(xgb_wflow, 
+                        split = data_split,
+                        metrics = metric_set(
+                          accuracy, f_meas, kap, precision,
+                          recall, roc_auc, sens, spec))
+
+last_fit_xgb %>% collect_metrics(summarize = TRUE)
+
+#Compare to training
+xgb_res %>% collect_metrics(summarize = TRUE)
 
 ```
 
@@ -1103,6 +1163,13 @@ This is a highly imbalanced data set, as roughly 99.5% of all transactions are o
 
 
 ```{r}
+
+## Variable importance using `{vip}` package
+last_fit_xgb %>% 
+  pluck(".workflow", 1) %>%   
+  pull_workflow_fit() %>% 
+  vip(num_features = 10) +
+  theme_light()
 
 ```
 
@@ -1123,6 +1190,7 @@ last_fit_xgb %>%
   collect_predictions() %>% 
   roc_curve(is_fraud, .pred_1) %>% 
   autoplot()
+
 ```
 
 
