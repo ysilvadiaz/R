@@ -1197,48 +1197,59 @@ last_fit_xgb %>%
 ```{r}
 #| label: savings-for-cc-company
 
+#| label: savings-for-cc-company
+
+# 1. Fit the model and generate predictions for the entire data set
 xgb_preds <- 
   xgb_wflow %>% 
-  fit(data = card_fraud_train) %>%  
-  
-  ## Use `augment()` to get predictions for entire data set
+  fit(data = card_fraud_train) %>%
   augment(new_data = card_fraud)
 
-xgb_preds %>% 
+# 2. Display confusion matrix for reference
+xgb_preds %>%
   conf_mat(truth = is_fraud, estimate = .pred_class)
 
+# 3. Add actual transaction amounts and predicted classes to the dataset
 cost <- xgb_preds %>%
-  select(is_fraud, log_amt, pred = .pred_class) 
+  mutate(
+    amt = exp(log_amt),                       # Convert log(amount) back to dollars
+    is_fraud = as.character(is_fraud),        # Ensure character for logic
+    pred = as.character(.pred_class)          # Ensure character for logic
+  )
 
+# 4. Calculate cost outcomes for each transaction
 cost <- cost %>%
   mutate(
-  
+    # False negatives: we thought they were not fraud, but they were
+    false_negative = ifelse(is_fraud == "1" & pred == "0", amt, 0),
+    # False positives: we thought they were fraud, but they were not
+    false_positive = ifelse(is_fraud == "0" & pred == "1", amt, 0),
+    # True positives: we thought they were fraud, and they were
+    true_positive  = ifelse(is_fraud == "1" & pred == "1", amt, 0),
+    # True negatives: we thought they were ok, and they were
+    true_negative  = ifelse(is_fraud == "0" & pred == "0", amt, 0),
+    # Naive case: if we classify everything as not fraud, we miss all fraud
+    naive_cost     = ifelse(is_fraud == "1", amt, 0)
+  )
 
-  # naive false-- we think every single transaction is ok and not fraud
+# 5. Summarize total costs for the model vs naive baseline
+total_costs <- cost %>%
+  summarise(
+    Total_Fraud_Missed_by_Model = sum(false_negative),
+    Total_Fraud_Missed_by_Naive = sum(naive_cost)
+  )
 
+print(total_costs)
 
-  # false negatives-- we thought they were not fraud, but they were
+# 6. (Optional) Summarize overall fraud statistics
+fraud_summary <- cost %>%
+  summarise(
+    Total_Transactions = sum(amt),
+    Total_Fraud = sum(amt[is_fraud == "1"]),
+    Percent_Fraud = 100 * sum(amt[is_fraud == "1"]) / sum(amt)
+  )
 
-  
-  
-  # false positives-- we thought they were fraud, but they were not
-
-  
-    
-  # true positives-- we thought they were fraud, and they were 
-
-
-  
-  # true negatives-- we thought they were ok, and they were 
-)
-  
-# Summarising
-
-cost_summary <- cost %>% 
-  summarise(across(starts_with(c("false","true", "amt")), 
-            ~ sum(.x, na.rm = TRUE)))
-
-cost_summary
+print(fraud_summary)
 
 ```
 
