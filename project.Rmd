@@ -501,7 +501,8 @@ ggplot(card_fraud, aes(x = log_amt)) +
   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
   labs(title = "Distribution of Amount in Logs", x = "Amount (log)", y = "Frequency")
 
-ggplot(card_fraud, aes(x = as.factor(fraud), y = amt, fill = as.factor(fraud))) +
+# Boxplot: Amount by Fraud Status
+ggplot(card_fraud, aes(x = as.factor(is_fraud), y = amt, fill = as.factor(is_fraud))) +
   geom_boxplot(alpha = 0.6) +
   scale_y_log10() +
   labs(title = "Transaction Amount by Fraud Status", x = "Fraud", y = "Amount (log scale)", fill = "Fraud")
@@ -623,12 +624,11 @@ ggplot(card_fraud, aes(x = age_group, y = amt)) +
   geom_boxplot(fill = "violet") +
   labs(title = "Amount by Age Group", x = "Age Group", y = "Amount")
 
-ggplot(card_fraud, aes(x = as.factor(fraud), y = age, fill = as.factor(fraud))) +
+# Boxplot: Age by Fraud Status
+ggplot(card_fraud, aes(x = as.factor(is_fraud), y = age, fill = as.factor(is_fraud))) +
   geom_boxplot(alpha = 0.6) +
   labs(title = "Cardholder Age by Fraud Status", x = "Fraud", y = "Age", fill = "Fraud")
 
-# Missing Values
-colSums(is.na(card_fraud[c("category", "amt", "age")]))
 
 ```
 __CONCLUSION:__
