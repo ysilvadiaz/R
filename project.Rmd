@@ -500,6 +500,11 @@ card_fraud <- card_fraud %>%
 ggplot(card_fraud, aes(x = log_amt)) +
   geom_histogram(bins = 30, fill = "skyblue", color = "black") +
   labs(title = "Distribution of Amount in Logs", x = "Amount (log)", y = "Frequency")
+
+ggplot(card_fraud, aes(x = as.factor(fraud), y = amt, fill = as.factor(fraud))) +
+  geom_boxplot(alpha = 0.6) +
+  scale_y_log10() +
+  labs(title = "Transaction Amount by Fraud Status", x = "Fraud", y = "Amount (log scale)", fill = "Fraud")
 ```
 __CONCLUSION:__
 The amt variable is highly right-skewed, with most transactions at lower amounts and a few extreme outliers at high values. This indicates that fraudulent activity may be associated with atypical transaction amounts, making this variable important for fraud detection.
@@ -618,12 +623,17 @@ ggplot(card_fraud, aes(x = age_group, y = amt)) +
   geom_boxplot(fill = "violet") +
   labs(title = "Amount by Age Group", x = "Age Group", y = "Amount")
 
+ggplot(card_fraud, aes(x = as.factor(fraud), y = age, fill = as.factor(fraud))) +
+  geom_boxplot(alpha = 0.6) +
+  labs(title = "Cardholder Age by Fraud Status", x = "Fraud", y = "Age", fill = "Fraud")
+
 # Missing Values
 colSums(is.na(card_fraud[c("category", "amt", "age")]))
 
 ```
 __CONCLUSION:__
-The age variable covers a wide range of cardholder ages, with clusters in young and middle-aged groups. The scatter and boxplots show that transaction amounts vary across age groups, with some groups exhibiting higher value outliers. This suggests age influences spending behavior and may contribute to identifying fraud risk.
+The age variable covers a wide range of cardholder ages, with clusters in young and middle-aged groups. Scatterplots and boxplots show transaction amounts vary across age groups, and some groups exhibit higher-value outliers. The boxplot comparing age by fraud status reveals observable differences between fraud and non-fraud cases, indicating that age may help in distinguishing fraudulent behavior. Therefore, age should be retained as a model input.
+
 
 __Exploring distance_miles and distance_km__
 The distance_miles and distance_km variables are numerical variables that represent the distance between the card holder's location and the merchant's location. We will keep only one of these variables, as they represent the same information in different units. We will keep distance_km.
